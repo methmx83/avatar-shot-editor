@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Timeline from './components/Timeline/Timeline';
+import AssetPanel from './components/AssetPanel';
 import { useTimelineStore } from './store/useTimelineStore';
-import { Settings, Folder, Play, Pause, Scissors, MousePointer2, Move, Plus } from 'lucide-react';
+import { useAssetStore } from './store/useAssetStore';
+import { Settings, Play, Pause, Scissors, MousePointer2, Move, Magnet, ArrowLeftRight, Trash2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const { timeline, setCurrentTime } = useTimelineStore();
+  const { timeline, setCurrentTime, isSnapping, toggleSnapping, isRippling, toggleRippling, selectedClipId, removeClip } = useTimelineStore();
+  const { assets } = useAssetStore();
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
@@ -16,6 +19,21 @@ const App: React.FC = () => {
     }
     return () => clearInterval(interval);
   }, [isPlaying, timeline.currentTime, setCurrentTime]);
+
+  // Handle Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedClipId) removeClip(selectedClipId);
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying(!isPlaying);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedClipId, removeClip, isPlaying]);
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] text-gray-200 overflow-hidden">
@@ -40,16 +58,7 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 flex overflow-hidden min-h-0">
         {/* Left Sidebar - Assets */}
-        <aside className="w-64 border-r border-[#333] flex flex-col bg-[#1a1a1a] flex-shrink-0">
-          <div className="p-3 border-b border-[#333] flex justify-between items-center">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Assets</span>
-            <button className="p-1 hover:bg-[#333] rounded-md"><Plus size={16} /></button>
-          </div>
-          <div className="flex-1 p-4 flex flex-col items-center justify-center text-gray-500 text-center">
-            <Folder size={48} strokeWidth={1} className="mb-2 opacity-20" />
-            <p className="text-sm">Drag and drop files here</p>
-          </div>
-        </aside>
+        <AssetPanel />
 
         {/* Center - Preview & Editor */}
         <section className="flex-1 flex flex-col min-w-0">
@@ -77,6 +86,34 @@ const App: React.FC = () => {
                 <button className="p-1.5 hover:bg-[#333] rounded-md"><Scissors size={16} /></button>
                 <button className="p-1.5 hover:bg-[#333] rounded-md"><Move size={16} /></button>
              </div>
+             
+             <div className="flex items-center gap-2 border-r border-[#333] pr-4">
+                <button 
+                  onClick={toggleSnapping}
+                  className={`p-1.5 rounded-md transition-colors ${isSnapping ? 'bg-blue-600 text-white' : 'hover:bg-[#333] text-gray-400'}`}
+                  title="Toggle Snapping (S)"
+                >
+                  <Magnet size={16} />
+                </button>
+                <button 
+                  onClick={toggleRippling}
+                  className={`p-1.5 rounded-md transition-colors ${isRippling ? 'bg-blue-600 text-white' : 'hover:bg-[#333] text-gray-400'}`}
+                  title="Toggle Rippling (R)"
+                >
+                  <ArrowLeftRight size={16} />
+                </button>
+             </div>
+
+             {selectedClipId && (
+               <button 
+                onClick={() => removeClip(selectedClipId)}
+                className="p-1.5 hover:bg-red-900/40 text-red-500 rounded-md transition-colors"
+                title="Delete Selected Clip"
+               >
+                 <Trash2 size={16} />
+               </button>
+             )}
+
              <div className="flex-1"></div>
              <div className="flex items-center gap-2">
                 <span className="text-[10px] text-gray-500">ZOOM</span>
@@ -96,7 +133,15 @@ const App: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Inspector</span>
           </div>
           <div className="p-4 text-sm text-gray-500 text-center mt-10">
-            Select a clip to view properties
+            {selectedClipId ? (
+              <div className="text-left space-y-4">
+                <h3 className="font-bold text-gray-300">Clip Properties</h3>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase text-gray-600">ID</label>
+                  <p className="font-mono text-[10px] truncate">{selectedClipId}</p>
+                </div>
+              </div>
+            ) : "Select a clip to view properties"}
           </div>
         </aside>
       </main>
@@ -105,6 +150,7 @@ const App: React.FC = () => {
       <footer className="h-6 border-t border-[#333] bg-[#1e1e1e] px-3 flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-widest flex-shrink-0">
         <span>Ready</span>
         <div className="flex gap-4">
+          <span>Assets: {assets.length}</span>
           <span>ComfyUI: <span className="text-green-500">Connected</span></span>
           <span>FPS: 60</span>
         </div>

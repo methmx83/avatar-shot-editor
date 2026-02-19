@@ -4,18 +4,27 @@ import { Timeline, TimelineTrack, TimelineClip } from '@avatar-shot-editor/share
 interface TimelineState {
   timeline: Timeline;
   selectedClipId: string | null;
+  isRippling: boolean;
+  isSnapping: boolean;
   
   // Actions
   setCurrentTime: (time: number) => void;
   setZoom: (zoom: number) => void;
   setSelectedClip: (id: string | null) => void;
+  toggleRippling: () => void;
+  toggleSnapping: () => void;
+  
   addTrack: (track: TimelineTrack) => void;
   addClip: (trackId: string, clip: TimelineClip) => void;
   updateClip: (clipId: string, updates: Partial<TimelineClip>) => void;
+  moveClip: (clipId: string, newStartTime: number, newTrackId?: string) => void;
   removeClip: (clipId: string) => void;
+  
+  // Advanced Editing
+  splitClip: (clipId: string, time: number) => void;
 }
 
-export const useTimelineStore = create<TimelineState>((set) => ({
+export const useTimelineStore = create<TimelineState>((set, get) => ({
   timeline: {
     tracks: [
       { id: 'v1', name: 'Video 1', type: 'video', clips: [], isMuted: false, isLocked: false },
@@ -23,9 +32,11 @@ export const useTimelineStore = create<TimelineState>((set) => ({
     ],
     currentTime: 0,
     zoom: 1,
-    duration: 600, // 10 minutes default
+    duration: 600,
   },
   selectedClipId: null,
+  isRippling: false,
+  isSnapping: true,
 
   setCurrentTime: (time) => set((state) => ({
     timeline: { ...state.timeline, currentTime: Math.max(0, time) }
@@ -36,6 +47,9 @@ export const useTimelineStore = create<TimelineState>((set) => ({
   })),
 
   setSelectedClip: (id) => set({ selectedClipId: id }),
+  
+  toggleRippling: () => set((state) => ({ isRippling: !state.isRippling })),
+  toggleSnapping: () => set((state) => ({ isSnapping: !state.isSnapping })),
 
   addTrack: (track) => set((state) => ({
     timeline: { ...state.timeline, tracks: [...state.timeline.tracks, track] }
@@ -60,13 +74,104 @@ export const useTimelineStore = create<TimelineState>((set) => ({
     }
   })),
 
-  removeClip: (clipId) => set((state) => ({
-    timeline: {
-      ...state.timeline,
-      tracks: state.timeline.tracks.map(t => ({
-        ...t,
-        clips: t.clips.filter(c => c.id !== clipId)
-      }))
+  moveClip: (clipId, newStartTime, newTrackId) => {
+    const { timeline, isSnapping } = get();
+    let finalStartTime = Math.max(0, newStartTime);
+
+    if (isSnapping) {
+      const threshold = 0.2; // 200ms snapping threshold
+      for (const track of timeline.tracks) {
+        for (const clip of track.clips) {
+          if (clip.id === clipId) continue;
+          // Snap to start or end of other clips
+          if (Math.abs(finalStartTime - clip.startTime) < threshold) {
+            finalStartTime = clip.startTime;
+          } else if (Math.abs(finalStartTime - (clip.startTime + clip.duration)) < threshold) {
+            finalStartTime = clip.startTime + clip.duration;
+          }
+          // Snap to playhead
+          if (Math.abs(finalStartTime - timeline.currentTime) < threshold) {
+             finalStartTime = timeline.currentTime;
+          }
+        }
+      }
     }
-  })),
+
+    set((state) => {
+      const tracks = state.timeline.tracks.map(track => {
+        const clipToMove = track.clips.find(c => c.id === clipId);
+        if (clipToMove) {
+          // If moving to a new track
+          if (newTrackId && newTrackId !== track.id) {
+             return { ...track, clips: track.clips.filter(c => c.id !== clipId) };
+          }
+          return {
+            ...track,
+            clips: track.clips.map(c => c.id === clipId ? { ...c, startTime: finalStartTime } : c)
+          };
+        }
+        // If this is the target track and we're moving from another track
+        if (newTrackId === track.id) {
+           const sourceTrack = state.timeline.tracks.find(t => t.clips.some(c => c.id === clipId));
+           const clip = sourceTrack?.clips.find(c => c.id === clipId);
+           if (clip) {
+             return { ...track, clips: [...track.clips, { ...clip, startTime: finalStartTime, trackId: newTrackId }] };
+           }
+        }
+        return track;
+      });
+
+      return { timeline: { ...state.timeline, tracks } };
+    });
+  },
+
+  removeClip: (clipId) => set((state) => {
+    const { isRippling } = state;
+    let clipToRemove: TimelineClip | undefined;
+    
+    state.timeline.tracks.forEach(t => {
+      const found = t.clips.find(c => c.id === clipId);
+      if (found) clipToRemove = found;
+    });
+
+    const tracks = state.timeline.tracks.map(t => {
+      const filteredClips = t.clips.filter(c => c.id !== clipId);
+      if (isRippling && clipToRemove && t.id === clipToRemove.trackId) {
+        return {
+          ...t,
+          clips: filteredClips.map(c => 
+            c.startTime > clipToRemove!.startTime 
+              ? { ...c, startTime: c.startTime - clipToRemove!.duration } 
+              : c
+          )
+        };
+      }
+      return { ...t, clips: filteredClips };
+    });
+
+    return { timeline: { ...state.timeline, tracks }, selectedClipId: null };
+  }),
+
+  splitClip: (clipId, time) => set((state) => {
+    const tracks = state.timeline.tracks.map(track => {
+      const clip = track.clips.find(c => c.id === clipId);
+      if (clip && time > clip.startTime && time < clip.startTime + clip.duration) {
+        const splitPoint = time - clip.startTime;
+        const clip1 = { ...clip, duration: splitPoint };
+        const clip2 = { 
+          ...clip, 
+          id: crypto.randomUUID(), 
+          startTime: time, 
+          duration: clip.duration - splitPoint,
+          offset: clip.offset + splitPoint
+        };
+        return {
+          ...track,
+          clips: [...track.clips.filter(c => c.id !== clipId), clip1, clip2]
+        };
+      }
+      return track;
+    });
+    return { timeline: { ...state.timeline, tracks } };
+  }),
 }));
