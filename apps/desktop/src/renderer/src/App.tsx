@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Timeline from './components/Timeline/Timeline';
 import AssetPanel from './components/AssetPanel';
+import Inspector from './components/Inspector';
 import { useTimelineStore } from './store/useTimelineStore';
 import { useAssetStore } from './store/useAssetStore';
 import { Settings, Play, Pause, Scissors, MousePointer2, Move, Magnet, ArrowLeftRight, Trash2 } from 'lucide-react';
@@ -128,22 +129,7 @@ const App: React.FC = () => {
         </section>
 
         {/* Right Sidebar - Inspector */}
-        <aside className="w-72 border-l border-[#333] bg-[#1a1a1a] flex flex-col flex-shrink-0">
-          <div className="p-3 border-b border-[#333]">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Inspector</span>
-          </div>
-          <div className="p-4 text-sm text-gray-500 text-center mt-10">
-            {selectedClipId ? (
-              <div className="text-left space-y-4">
-                <h3 className="font-bold text-gray-300">Clip Properties</h3>
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase text-gray-600">ID</label>
-                  <p className="font-mono text-[10px] truncate">{selectedClipId}</p>
-                </div>
-              </div>
-            ) : "Select a clip to view properties"}
-          </div>
-        </aside>
+        <Inspector />
       </main>
       
       {/* Footer / Status Bar */}

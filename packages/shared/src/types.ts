@@ -16,6 +16,13 @@ export interface TimelineClip {
   name: string;
   color?: string;
   type: 'video' | 'audio' | 'image';
+  // Transformation properties
+  scale: number;
+  position: { x: number; y: number };
+  opacity: number;
+  rotation: number;
+  blur?: number;
+  blendMode?: string;
 }
 
 export interface TimelineTrack {

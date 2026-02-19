@@ -15,7 +15,7 @@ interface TimelineState {
   toggleSnapping: () => void;
   
   addTrack: (track: TimelineTrack) => void;
-  addClip: (trackId: string, clip: TimelineClip) => void;
+  addClip: (trackId: string, clip: Partial<TimelineClip> & { assetId: string; startTime: number; duration: number; sourcePath: string; name: string; type: 'video' | 'audio' | 'image' }) => void;
   updateClip: (clipId: string, updates: Partial<TimelineClip>) => void;
   moveClip: (clipId: string, newStartTime: number, newTrackId?: string) => void;
   removeClip: (clipId: string) => void;
@@ -55,14 +55,29 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     timeline: { ...state.timeline, tracks: [...state.timeline.tracks, track] }
   })),
 
-  addClip: (trackId, clip) => set((state) => ({
-    timeline: {
-      ...state.timeline,
-      tracks: state.timeline.tracks.map(t => 
-        t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t
-      )
-    }
-  })),
+  addClip: (trackId, clipData) => set((state) => {
+    const newClip: TimelineClip = {
+      id: crypto.randomUUID(),
+      trackId,
+      offset: 0,
+      scale: 1,
+      position: { x: 0, y: 0 },
+      opacity: 1,
+      rotation: 0,
+      blur: 0,
+      blendMode: 'normal',
+      ...clipData
+    };
+
+    return {
+      timeline: {
+        ...state.timeline,
+        tracks: state.timeline.tracks.map(t => 
+          t.id === trackId ? { ...t, clips: [...t.clips, newClip] } : t
+        )
+      }
+    };
+  }),
 
   updateClip: (clipId, updates) => set((state) => ({
     timeline: {
@@ -83,13 +98,11 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       for (const track of timeline.tracks) {
         for (const clip of track.clips) {
           if (clip.id === clipId) continue;
-          // Snap to start or end of other clips
           if (Math.abs(finalStartTime - clip.startTime) < threshold) {
             finalStartTime = clip.startTime;
           } else if (Math.abs(finalStartTime - (clip.startTime + clip.duration)) < threshold) {
             finalStartTime = clip.startTime + clip.duration;
           }
-          // Snap to playhead
           if (Math.abs(finalStartTime - timeline.currentTime) < threshold) {
              finalStartTime = timeline.currentTime;
           }
@@ -101,7 +114,6 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       const tracks = state.timeline.tracks.map(track => {
         const clipToMove = track.clips.find(c => c.id === clipId);
         if (clipToMove) {
-          // If moving to a new track
           if (newTrackId && newTrackId !== track.id) {
              return { ...track, clips: track.clips.filter(c => c.id !== clipId) };
           }
@@ -110,7 +122,6 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             clips: track.clips.map(c => c.id === clipId ? { ...c, startTime: finalStartTime } : c)
           };
         }
-        // If this is the target track and we're moving from another track
         if (newTrackId === track.id) {
            const sourceTrack = state.timeline.tracks.find(t => t.clips.some(c => c.id === clipId));
            const clip = sourceTrack?.clips.find(c => c.id === clipId);
