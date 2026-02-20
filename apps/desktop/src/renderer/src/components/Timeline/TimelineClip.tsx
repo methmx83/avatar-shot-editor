@@ -1,33 +1,52 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { TimelineClip as ITimelineClip } from '@avatar-shot-editor/shared';
 import { useTimelineStore } from '../../store/useTimelineStore';
+import { TimelineClip as ClipType } from '@avatar-shot-editor/shared';
+import TimelineContextMenu from './TimelineContextMenu';
 
 interface TimelineClipProps {
-  clip: ITimelineClip;
+  clip: ClipType;
   pixelsPerSecond: number;
 }
 
 const TimelineClip: React.FC<TimelineClipProps> = ({ clip, pixelsPerSecond }) => {
-  const { selectedClipId, setSelectedClip, moveClip, updateClip } = useTimelineStore();
+  const { selectedClipId, setSelectedClip, moveClip } = useTimelineStore();
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [originalStartTime, setOriginalStartTime] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const isSelected = selectedClipId === clip.id;
+  const clipRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
     e.stopPropagation();
     setSelectedClip(clip.id);
     setIsDragging(true);
-    setDragStartX(e.clientX);
-    setOriginalStartTime(clip.startTime);
+    
+    const rect = clipRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragOffset(e.clientX - rect.left);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedClip(clip.id);
+    setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
-      const deltaX = e.clientX - dragStartX;
-      const deltaTime = deltaX / pixelsPerSecond;
-      moveClip(clip.id, originalStartTime + deltaTime);
+      
+      const timelineElement = clipRef.current?.parentElement;
+      if (!timelineElement) return;
+      
+      const rect = timelineElement.getBoundingClientRect();
+      const newX = e.clientX - rect.left - dragOffset;
+      const newStartTime = newX / pixelsPerSecond;
+      
+      moveClip(clip.id, newStartTime);
     };
 
     const handleMouseUp = () => {
@@ -43,26 +62,48 @@ const TimelineClip: React.FC<TimelineClipProps> = ({ clip, pixelsPerSecond }) =>
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStartX, originalStartTime, pixelsPerSecond, clip.id, moveClip]);
+  }, [isDragging, dragOffset, clip.id, moveClip, pixelsPerSecond]);
 
   return (
-    <div 
-      className={`absolute top-1 bottom-1 rounded-sm cursor-move flex items-center px-2 overflow-hidden select-none border-2 transition-colors ${
-        isSelected ? 'border-white bg-blue-500 z-20' : 'border-blue-400/50 bg-blue-600/40 z-10'
-      } ${isDragging ? 'opacity-70 scale-[0.98]' : 'opacity-100'}`}
-      style={{ 
-        left: `${clip.startTime * pixelsPerSecond}px`, 
-        width: `${clip.duration * pixelsPerSecond}px`,
-        backgroundColor: clip.color || undefined
-      }}
-      onMouseDown={handleMouseDown}
-    >
-      <span className="text-[10px] font-medium truncate pointer-events-none">{clip.name}</span>
-      
-      {/* Resizer Handles */}
-      <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-white/30" />
-      <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-white/30" />
-    </div>
+    <>
+      <div 
+        ref={clipRef}
+        className={`absolute top-1 bottom-1 rounded-md cursor-grab active:cursor-grabbing flex flex-col px-2 py-1 overflow-hidden transition-all duration-150 border-2 shadow-lg ${
+          isSelected 
+            ? 'bg-blue-600/60 border-blue-400 z-20 ring-2 ring-blue-500/20' 
+            : 'bg-blue-800/30 border-blue-700/50 hover:bg-blue-700/40 hover:border-blue-500/50 z-10'
+        }`}
+        style={{ 
+          left: `${clip.startTime * pixelsPerSecond}px`, 
+          width: `${clip.duration * pixelsPerSecond}px`,
+        }}
+        onMouseDown={handleMouseDown}
+        onContextMenu={handleContextMenu}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+          <span className="text-[10px] font-bold text-blue-100 truncate uppercase tracking-tight">{clip.name}</span>
+        </div>
+        
+        {/* Visual representation of duration */}
+        <div className="mt-auto h-0.5 w-full bg-blue-400/20 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-400/50" style={{ width: '100%' }} />
+        </div>
+      </div>
+
+      {contextMenu && (
+        <TimelineContextMenu 
+          x={contextMenu.x} 
+          y={contextMenu.y} 
+          clipId={clip.id} 
+          onClose={() => setContextMenu(null)}
+          onSwitchToComfy={() => {
+             // We'll need a way to switch tabs, possibly via a custom event or store
+             window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'comfy' }));
+          }}
+        />
+      )}
+    </>
   );
 };
 
