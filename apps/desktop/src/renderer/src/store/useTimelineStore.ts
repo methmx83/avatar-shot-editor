@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Timeline, TimelineTrack, TimelineClip } from '@avatar-shot-editor/shared';
+import { Timeline, TimelineTrack, TimelineClip, Annotation } from '@avatar-shot-editor/shared';
 
 interface TimelineState {
   timeline: Timeline;
@@ -19,6 +19,12 @@ interface TimelineState {
   updateClip: (clipId: string, updates: Partial<TimelineClip>) => void;
   moveClip: (clipId: string, newStartTime: number, newTrackId?: string) => void;
   removeClip: (clipId: string) => void;
+  
+  // AI Metadata Actions
+  addAiTag: (clipId: string, tag: string) => void;
+  removeAiTag: (clipId: string, tag: string) => void;
+  addAnnotation: (clipId: string, annotation: Annotation) => void;
+  removeAnnotation: (clipId: string, annotationId: string) => void;
   
   // Advanced Editing
   splitClip: (clipId: string, time: number) => void;
@@ -66,6 +72,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       rotation: 0,
       blur: 0,
       blendMode: 'normal',
+      aiTags: [],
+      annotations: [],
       ...clipData
     };
 
@@ -162,6 +170,56 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
     return { timeline: { ...state.timeline, tracks }, selectedClipId: null };
   }),
+
+  addAiTag: (clipId, tag) => set((state) => ({
+    timeline: {
+      ...state.timeline,
+      tracks: state.timeline.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => 
+          c.id === clipId && !c.aiTags.includes(tag) 
+            ? { ...c, aiTags: [...c.aiTags, tag] } 
+            : c
+        )
+      }))
+    }
+  })),
+
+  removeAiTag: (clipId, tag) => set((state) => ({
+    timeline: {
+      ...state.timeline,
+      tracks: state.timeline.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => 
+          c.id === clipId ? { ...c, aiTags: c.aiTags.filter(t => t !== tag) } : c
+        )
+      }))
+    }
+  })),
+
+  addAnnotation: (clipId, annotation) => set((state) => ({
+    timeline: {
+      ...state.timeline,
+      tracks: state.timeline.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => 
+          c.id === clipId ? { ...c, annotations: [...c.annotations, annotation] } : c
+        )
+      }))
+    }
+  })),
+
+  removeAnnotation: (clipId, annotationId) => set((state) => ({
+    timeline: {
+      ...state.timeline,
+      tracks: state.timeline.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => 
+          c.id === clipId ? { ...c, annotations: c.annotations.filter(a => a.id !== annotationId) } : c
+        )
+      }))
+    }
+  })),
 
   splitClip: (clipId, time) => set((state) => {
     const tracks = state.timeline.tracks.map(track => {

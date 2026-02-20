@@ -5,6 +5,14 @@ export interface Asset {
   path: string;
 }
 
+export interface Annotation {
+  id: string;
+  type: 'rect' | 'mask';
+  points: { x: number; y: number }[];
+  label: string;
+  color: string;
+}
+
 export interface TimelineClip {
   id: string;
   assetId: string;
@@ -23,6 +31,10 @@ export interface TimelineClip {
   rotation: number;
   blur?: number;
   blendMode?: string;
+  // AI Metadata
+  aiTags: string[];
+  annotations: Annotation[];
+  promptOverride?: string;
 }
 
 export interface TimelineTrack {
